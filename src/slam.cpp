@@ -1,5 +1,7 @@
 #include <iostream>
 #include <string>
+#include <fstream>
+
 
 #define _USE_MATH_DEFINES
 
@@ -11,6 +13,7 @@
 #include <yaml-cpp/yaml.h>
 #include <tclap/CmdLine.h>
 
+// #include "constant.h"
 
 #include "ct_icp/odometry.hpp"
 #include "ct_icp/dataset.hpp"
@@ -22,6 +25,8 @@
 
 #include <viz3d/engine.hpp>
 #include <imgui.h>
+
+using namespace std;
 
 
 struct ControlSlamWindow : viz::ExplorationEngine::GUIWindow {
@@ -49,6 +54,9 @@ using namespace ct_icp;
 
 namespace ct_icp {
 
+    std::vector<double> alpha;
+    std::vector<double> c;
+    std::vector<std::vector<double>> constTable;
 
     enum SLAM_VIZ_MODE {
         AGGREGATED,     // Will display all aggregated frames
@@ -344,6 +352,45 @@ int main(int argc, char **argv) {
     // Read Command line arguments
     const auto options = read_arguments(argc, argv);
 
+    string fname = "/home/navlab-shounak/catkin_ws/src/LIO_SAM_Mining_Project/LIO-SAM/src/tablenew.txt";
+
+    // srand (static_cast <unsigned> (time(0)));
+    ct_icp::alpha = {2.0, 1.75, 1.50, 1.25, 1.0, 0.75, 0.50, 0.25, 0.0, -0.25, -0.50, -0.75,
+                                    -1.0, -1.25, -1.50, -1.75, -2.0, -2.25, -2.50, -2.75, -3.0, -3.25, -3.50, -3.75,
+                                    -4.0, -4.25, -4.50, -4.75, -5.0, -5.25, -5.50, -5.75, -6.0, -6.25, -6.50, -6.75,
+                                    -7.0, -7.25, -7.50, -7.75, -8.0};
+
+    ct_icp::c = {1.0, 1.25, 1.50, 1.75, 2.0, 2.25, 2.50, 2.75, 3.0, 3.25, 3.50, 3.75,
+                        4.0, 4.25, 4.50, 4.75, 5.0, 5.25, 5.50, 5.75, 6.0};
+
+    // std::vector<std::vector<double>> constTable;
+    std::vector<double> row;
+    string line, word;
+    fstream file (fname, ios::in);
+    if(file.is_open())
+    {
+        while(getline(file, line))
+        {
+            row.clear();
+            stringstream str(line);
+            while(getline(str, word, ' '))
+                row.push_back(stof(word));
+            ct_icp::constTable.push_back(row);
+        }
+    }
+    else{
+        cout<<"Could not open the file\n";
+    }
+    std::cout << " Finished reading " << std::endl;
+
+    if ((ct_icp::constTable[40][20] > 14.9) && (ct_icp::constTable[40][20] < 15.0)){
+       std::cout << "Read constants correctly!" << std::endl;
+    }
+    else {
+       std::cout << "SOMETHING WRONg WITH READING TEXT FILE !! " << std::endl;
+    }
+
+
     // Build the Output_dir
 #if WITH_STD_FILESYSTEM
     CHECK(fs::exists(options.dataset_options.root_path))
@@ -585,7 +632,3 @@ int main(int argc, char **argv) {
 
     return 0;
 }
-
-
-
-

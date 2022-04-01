@@ -2,6 +2,8 @@
 #include <chrono>
 #include <queue>
 #include <thread>
+#include <fstream>
+#include <string>
 
 #include <Eigen/StdVector>
 #include <ceres/ceres.h>
@@ -750,6 +752,29 @@ namespace ct_icp {
 
         ICPSummary summary;
 
+        int minalphaind = 0;
+        int mincind = 0;
+
+
+        std::vector<double> alpha{2.0, 1.75, 1.50, 1.25, 1.0, 0.75, 0.50, 0.25, 0.0, -0.25, -0.50, -0.75,
+                                -1.0, -1.25, -1.50, -1,75, -2.0, -2.25, -2.50, -2.75, -3.0, -3.25, -3.50, -3.75,
+                                -4.0, -4.25, -4.50, -4,75, -5.0, -5.25, -5.50, -5.75, -6.0, -6.25, -6.50, -6.75,
+                                -7.0, -7.25, -7.50, -7,75, -8.0};
+
+    	std::vector<double> c{1.0, 1.25, 1.50, 1,75, 2.0, 2.25, 2.50, 2.75, 3.0, 3.25, 3.50, 3.75,
+                            4.0, 4.25, 4.50, 4.75, 5.0, 5.25, 5.50, 5.75, 6.0};
+
+        int lenalpha = 41;
+        int lenc = 21;
+
+        double totallike;
+    	std::vector<double> likevecalpha(41, 0.0);
+    	std::vector<double> likevecc(21, 0.0);
+        std::vector<double> resvec;
+
+        double bestc = 1.0;
+        double bestalpha = 2.0;
+
         int num_iter_icp = index_frame < options.init_num_frames ? 15 : options.num_iters_icp;
         for (int iter(0); iter < num_iter_icp; iter++) {
             A = Eigen::MatrixXd::Zero(12, 12);
@@ -758,6 +783,51 @@ namespace ct_icp {
             number_keypoints_used = 0;
             double total_scalar = 0;
             double mean_scalar = 0.0;
+
+            // group together all the residuals in resvec
+
+            resvec.clear();
+            for (auto &keypoint: keypoints){
+                auto &pt_keypoint = keypoint.pt;
+
+                // Neighborhood search
+                ArrayVector3d vector_neighbors = search_neighbors(voxels_map, pt_keypoint,
+                                                                  nb_voxels_visited, options.size_voxel_map,
+                                                                  options.max_number_neighbors);
+
+                if (vector_neighbors.size() < kMinNumNeighbors) {
+                    continue;
+                }
+
+                // Compute normals from neighbors
+                auto neighborhood = compute_neighborhood_distribution(vector_neighbors);
+                double planarity_weight = neighborhood.a2D;
+                auto &normal = neighborhood.normal;
+
+                if (normal.dot(trajectory[index_frame].begin_t - pt_keypoint) < 0) {
+                    normal = -1.0 * normal;
+                }
+
+                double alpha_timestamp = keypoint.alpha_timestamp;
+                double weight = planarity_weight *
+                                planarity_weight; //planarity_weight**2 much better than planarity_weight (planarity_weight**3 is not working)
+
+                Eigen::Vector3d closest_pt_normal = weight * normal;
+
+                Eigen::Vector3d closest_point = vector_neighbors[0];
+
+                double dist_to_plane = normal[0] * (pt_keypoint[0] - closest_point[0]) +
+                                       normal[1] * (pt_keypoint[1] - closest_point[1]) +
+                                       normal[2] * (pt_keypoint[2] - closest_point[2]);
+
+                double residual =  dist_to_plane;
+
+                resvec.push_back(residual);
+
+            }
+
+            // calculate best c and best alpha
+            std::vector<double> params = selectBest(resvec);
 
             for (auto &keypoint: keypoints) {
                 auto start = std::chrono::steady_clock::now();
@@ -792,6 +862,7 @@ namespace ct_icp {
                 double alpha_timestamp = keypoint.alpha_timestamp;
                 double weight = planarity_weight *
                                 planarity_weight; //planarity_weight**2 much better than planarity_weight (planarity_weight**3 is not working)
+
                 Eigen::Vector3d closest_pt_normal = weight * normal;
 
                 Eigen::Vector3d closest_point = vector_neighbors[0];
@@ -799,6 +870,10 @@ namespace ct_icp {
                 double dist_to_plane = normal[0] * (pt_keypoint[0] - closest_point[0]) +
                                        normal[1] * (pt_keypoint[1] - closest_point[1]) +
                                        normal[2] * (pt_keypoint[2] - closest_point[2]);
+
+                double residual =  dist_to_plane;
+                double residualWeight = robustcostWeight(residual, bestc, bestalpha);
+                closest_pt_normal = residualWeight * closest_pt_normal;
 
                 auto step3 = std::chrono::steady_clock::now();
                 std::chrono::duration<double> _elapsed_normals = step3 - step2;
@@ -990,6 +1065,8 @@ namespace ct_icp {
             std::cout << "Elapsed Solve: " << elapsed_solve << std::endl;
             std::cout << "Elapsed Solve: " << elapsed_update << std::endl;
             std::cout << "Number iterations CT-ICP : " << options.num_iters_icp << std::endl;
+            std::cout << "Best alpha value : " << bestalpha << std::endl;
+            std::cout << "Best c value : " << bestc << std::endl;
         }
         summary.success = true;
         summary.num_residuals_used = number_keypoints_used;
@@ -997,5 +1074,80 @@ namespace ct_icp {
         return summary;
     }
 
+    double robustcost(double r, double c, double alpha){
+    	if (alpha == 2.0){
+        	return 0.5*pow(r/c,2);}
+    	else if (alpha == 0.0){
+        	return log(0.5*pow(r/c,2) + 1);}
+    	else if (alpha < -1000.0){
+        	return 1 - exp(-0.5*pow(r/c,2));}
+    	else {
+        	return (abs(alpha-2)/alpha)*(pow(r*r/(c*c*abs(alpha-2)) + 1,(alpha/2))-1);}
+
+    }
+
+    double robustcostWeight(double r, double c, double alpha){
+    	double weight;
+        if(std::abs(r) <= 10){
+        	if (alpha == 2){
+            	weight = 1/(c*c);}
+        	else if (alpha == 0){
+            	weight = 2/(r*r + 2*c*c);}
+        	else if (alpha < -1000){
+            	weight = exp(-0.5*(r*r/c*c))/(c*c);}
+        	else {
+            	weight = pow((r*r/(c*c*abs(alpha-2)) + 1),(alpha/2-1))/(c*c);}
+        }
+        else{
+            weight = 0.0000001; // due to the assumption from Chebrolu et al.
+        }
+    	return weight;
+    }
+
+    std::vector<double> selectBest(std::vector<double>& resvec){
+        double totallike;
+
+        extern std::vector<double> alpha;
+        extern std::vector<double> c;
+        extern std::vector<std::vector<double>> constTable;
+
+    	std::vector<double> likevecalpha(41, 0.0);
+    	std::vector<double> likevecc(21, 0.0);
+
+        int lenalpha = 41;
+        int lenc = 21;
+
+        int minalphaind = 0;
+        int mincind = 0;
+
+        for(int ip =0; ip < lenalpha; ip++){
+            totallike = 0.0;
+                for(auto it : resvec)
+                {
+                    totallike += -log(exp(-robustcost(it,c[mincind], alpha[ip]))/constTable[ip][mincind]);
+                }
+            likevecalpha[ip] = totallike;
+        }
+
+        auto smallest = std::min_element( likevecalpha.begin(), likevecalpha.end());
+        minalphaind = std::distance(likevecalpha.begin(), smallest);
+        double bestalpha = alpha[minalphaind];
+
+        for(int ip2 =0; ip2 < lenc; ip2++){
+            totallike = 0.0;
+                for(auto it2 : resvec){
+                    totallike += -log(exp(-robustcost(it2,c[ip2], alpha[minalphaind]))/constTable[minalphaind][ip2]);
+                }
+
+            likevecc[ip2] = totallike;
+        }
+
+        auto smallest2 = std::min_element( likevecc.begin(), likevecc.end());
+        mincind = std::distance(likevecc.begin(), smallest2);
+        double bestc = c[mincind];
+
+        std::vector<double> params = {bestalpha, bestc};
+        return params;
+    }
 
 } // namespace Elastic_ICP

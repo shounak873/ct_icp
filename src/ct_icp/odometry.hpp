@@ -3,6 +3,7 @@
 
 #include "ct_icp.hpp"
 #include <map>
+// #include "constant.h"
 
 namespace ct_icp {
 
@@ -192,6 +193,7 @@ namespace ct_icp {
                                         const CTICPOptions &options,
                                         RegistrationSummary &registration_summary,
                                         double sample_voxel_size);
+
 
         // Insert a New Trajectory Frame, and initializes the motion for this new frame
         int InitializeMotion(const TrajectoryFrame *initial_estimate = nullptr);

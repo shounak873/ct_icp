@@ -18,6 +18,7 @@
 
 #include "types.hpp"
 #include "cost_functions.h"
+// #include "constant.h"
 
 
 namespace ct_icp {
@@ -167,6 +168,12 @@ namespace ct_icp {
     ICPSummary CT_ICP_GN(const CTICPOptions &options,
                          const VoxelHashMap &voxels_map, std::vector<Point3D> &keypoints,
                          std::vector<TrajectoryFrame> &trajectory, int index_frame);
+
+    double robustcost(double r, double c, double alpha);
+
+    double robustcostWeight(double r, double c, double alpha);
+
+    std::vector<double> selectBest(std::vector<double>& resvec);
 
 } // namespace Elastic_ICP
 
