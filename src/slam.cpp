@@ -352,7 +352,7 @@ int main(int argc, char **argv) {
     // Read Command line arguments
     const auto options = read_arguments(argc, argv);
 
-    string fname = "/home/navlab-shounak/catkin_ws/src/LIO_SAM_Mining_Project/LIO-SAM/src/tablenew.txt";
+    string fname = "/home/navlab-shounak/ct_icp/src/tablenew.txt";
 
     // srand (static_cast <unsigned> (time(0)));
     ct_icp::alpha = {2.0, 1.75, 1.50, 1.25, 1.0, 0.75, 0.50, 0.25, 0.0, -0.25, -0.50, -0.75,
@@ -383,12 +383,12 @@ int main(int argc, char **argv) {
     }
     std::cout << " Finished reading " << std::endl;
 
-    if ((ct_icp::constTable[40][20] > 14.9) && (ct_icp::constTable[40][20] < 15.0)){
-       std::cout << "Read constants correctly!" << std::endl;
-    }
-    else {
-       std::cout << "SOMETHING WRONg WITH READING TEXT FILE !! " << std::endl;
-    }
+    // if ((ct_icp::constTable[40][20] > 14.9) && (ct_icp::constTable[40][20] < 15.0)){
+    //    std::cout << "Read constants correctly!" << std::endl;
+    // }
+    // else {
+    //    std::cout << "SOMETHING WRONG WITH READING TEXT FILE !! " << std::endl;
+    // }
 
 
     // Build the Output_dir

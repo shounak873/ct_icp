@@ -755,15 +755,6 @@ namespace ct_icp {
         int minalphaind = 0;
         int mincind = 0;
 
-
-        std::vector<double> alpha{2.0, 1.75, 1.50, 1.25, 1.0, 0.75, 0.50, 0.25, 0.0, -0.25, -0.50, -0.75,
-                                -1.0, -1.25, -1.50, -1,75, -2.0, -2.25, -2.50, -2.75, -3.0, -3.25, -3.50, -3.75,
-                                -4.0, -4.25, -4.50, -4,75, -5.0, -5.25, -5.50, -5.75, -6.0, -6.25, -6.50, -6.75,
-                                -7.0, -7.25, -7.50, -7,75, -8.0};
-
-    	std::vector<double> c{1.0, 1.25, 1.50, 1,75, 2.0, 2.25, 2.50, 2.75, 3.0, 3.25, 3.50, 3.75,
-                            4.0, 4.25, 4.50, 4.75, 5.0, 5.25, 5.50, 5.75, 6.0};
-
         int lenalpha = 41;
         int lenc = 21;
 
@@ -826,8 +817,14 @@ namespace ct_icp {
 
             }
 
+            // -------------------------------------------------------
             // calculate best c and best alpha
-            std::vector<double> params = selectBest(resvec);
+            if(iter%10 == 0){
+                std::vector<double> params = selectBest(resvec);
+                bestalpha = parmas[0];
+                bestc = params[1];
+            }
+            // -------------------------------------------------------
 
             for (auto &keypoint: keypoints) {
                 auto start = std::chrono::steady_clock::now();
@@ -1090,13 +1087,13 @@ namespace ct_icp {
     	double weight;
         if(std::abs(r) <= 10){
         	if (alpha == 2){
-            	weight = 1/(c*c);}
+            	weight = 1;}
         	else if (alpha == 0){
-            	weight = 2/(r*r + 2*c*c);}
+            	weight = 2*(c*c)/(r*r + 2*c*c);}
         	else if (alpha < -1000){
-            	weight = exp(-0.5*(r*r/c*c))/(c*c);}
+            	weight = exp(-0.5*(r*r/c*c));}
         	else {
-            	weight = pow((r*r/(c*c*abs(alpha-2)) + 1),(alpha/2-1))/(c*c);}
+            	weight = pow((r*r/(c*c*abs(alpha-2)) + 1),(alpha/2-1));}
         }
         else{
             weight = 0.0000001; // due to the assumption from Chebrolu et al.
